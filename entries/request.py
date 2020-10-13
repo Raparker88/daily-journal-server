@@ -63,7 +63,7 @@ def get_single_entry(id):
 
         return json.dumps(entry.__dict__)
 
-def create_location(location):
+def create_entry(entry):
 
     max_id = LOCATIONS[-1]["id"]
 
@@ -75,8 +75,8 @@ def create_location(location):
 
     return location
 
-def delete_location(id):
-    location_index = -1
+def delete_entry(id):
+    entry_index = -1
 
     for index, location in enumerate(LOCATIONS):
         if location["id"] == id:
