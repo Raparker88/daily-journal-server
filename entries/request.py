@@ -76,15 +76,15 @@ def create_entry(entry):
     return location
 
 def delete_entry(id):
-    entry_index = -1
+    with sqlite3.connect("./dailyjournal.db") as conn:
+        db_cursor = conn.cursor()
 
-    for index, location in enumerate(LOCATIONS):
-        if location["id"] == id:
-            location_index = index
+        db_cursor.execute("""
+        DELETE FROM Entries
+        WHERE id = ?
+        """), (id, ))
 
-    if location_index >= 0:
-        LOCATIONS.pop(location_index)
-
+        
 def update_location(id, new_location):
 
     for index, location in enumerate(LOCATIONS):
