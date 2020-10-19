@@ -1,28 +1,37 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from entries import get_all_entries, get_single_entry
 import json
+from entries import get_all_entries, get_single_entry, create_entry, delete_entry, update_entry
+from moods import get_all_moods
 
 # Here's a class. It inherits from another class.
 class HandleRequests(BaseHTTPRequestHandler):
 
     def parse_url(self, path):
-        # Just like splitting a string in JavaScript. If the
-        # path is "/animals/1", the resulting list will
-        # have "" at index 0, "animals" at index 1, and "1"
-        # at index 2.
+       
         path_params = path.split("/")
         resource = path_params[1]
-        id = None
 
+        if "?" in resource:
+            # GIVEN: /customers?email=jenna@solis.com
+
+            param = resource.split("?")[1]  # email=jenna@solis.com
+            resource = resource.split("?")[0]  # 'customers'
+            pair = param.split("=")  # [ 'email', 'jenna@solis.com' ]
+            key = pair[0]  # 'email'
+            value = pair[1]  # 'jenna@solis.com'
+
+            return ( resource, key, value )
         # Try to get the item at index 2
-        try:
-            id = int(path_params[2])
-        except IndexError:
-            pass  # No route parameter exists: /animals
-        except ValueError:
-            pass  # Request had trailing slash: /animals/
+        else:
+            id = None
+            try:
+                id = int(path_params[2])
+            except IndexError:
+                pass  # No route parameter exists: /animals
+            except ValueError:
+                pass  # Request had trailing slash: /animals/
 
-        return (resource, id)  # This is a tuple
+            return (resource, id)  # This is a tuple
 
 
     # Here's a class function
@@ -38,7 +47,7 @@ class HandleRequests(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
-        self.send_header('Access-Control-Allow-Headers', 'X-Requested-With')
+        self.send_header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type')
         self.end_headers()
         
     def do_GET(self):
@@ -46,16 +55,25 @@ class HandleRequests(BaseHTTPRequestHandler):
         response = {}  # Default response
 
         # Parse the URL and capture the tuple that is returned
-        (resource, id) = self.parse_url(self.path)
+        parsed = self.parse_url(self.path)
 
-        if resource == "entries":
-            if id is not None:
-                response = f"{get_single_entry(id)}"
+        if len(parsed) == 2:
+            (resource, id) = parsed
 
-            else:
-                response = f"{get_all_entries()}"
+            if resource == "entries":
+                if id is not None:
+                    response = f"{get_single_entry(id)}"
+
+                else:
+                    response = f"{get_all_entries()}"
+            if resource == "moods":
+                response = f"{get_all_moods()}"
         
-        
+        elif len(parsed) == 3:
+            (resource, key, value) = parsed
+            
+            if key == "q" and resource == "entries":
+                response = get_all_entries(value)
 
         self.wfile.write(response.encode())
 
@@ -73,18 +91,14 @@ class HandleRequests(BaseHTTPRequestHandler):
         # Parse the URL
         (resource, id) = self.parse_url(self.path)
 
-        # Initialize new animal
-        new_post = None
+        new_entry = None
 
-        # Add a new animal to the list. Don't worry about
-        # the orange squiggle, you'll define the create_animal
-        # function next.
         if resource == "entries":
-            new_post = create_entry(post_body)
+            new_entry = create_entry(post_body)
 
 
         # Encode the new animal and send in response
-        self.wfile.write(f"{new_post}".encode())
+        self.wfile.write(f"{new_entry}".encode())
 
     def do_DELETE(self):
         # Set a 204 response code
@@ -102,7 +116,6 @@ class HandleRequests(BaseHTTPRequestHandler):
         self.wfile.write("".encode())
     
     def do_PUT(self):
-        self._set_headers(204)
         content_len = int(self.headers.get('content-length', 0))
         post_body = self.rfile.read(content_len)
         post_body = json.loads(post_body)
@@ -112,7 +125,12 @@ class HandleRequests(BaseHTTPRequestHandler):
 
         # Update a single animal from the list
         if resource == "entries":
-            update_entry(id, post_body)
+            success = update_entry(id, post_body)
+
+        if success:
+            self._set_headers(204)
+        else:
+            self._set_headers(404)
 
         # Encode the new animal and send in response
         self.wfile.write("".encode())

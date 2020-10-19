@@ -1,6 +1,7 @@
 class Entry():
-    def __init__(self, id, date, entry, moodId):
+    def __init__(self, id, date, entry, moodId, concepts):
         self.id = id
         self.date = date
         self.entry = entry
-        self.mood_id = moodId
+        self.moodId = moodId
+        self.concept = concepts

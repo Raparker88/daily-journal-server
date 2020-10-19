@@ -1,10 +1,10 @@
 import sqlite3
 import json
-from models import Entry
+from models import Entry, Mood
 
 
 
-def get_all_entries():
+def get_all_entries(value=""):
     with sqlite3.connect("./dailyjournal.db") as conn:
 
         # Just use these. It's a Black Box.
@@ -12,14 +12,31 @@ def get_all_entries():
         db_cursor = conn.cursor()
 
         # Write the SQL query to get the information you want
-        db_cursor.execute("""
-        SELECT
-            e.id,
-            e.date,
-            e.entry,
-            e.mood_id
-        FROM entries e
-        """)
+        if len(value) > 0:
+            db_cursor.execute("""
+            SELECT
+                e.id,
+                e.date,
+                e.entry,
+                e.mood_id,
+                e.concepts,
+                m.label
+            FROM entries e
+            JOIN Moods m ON e.mood_id = m.id
+            WHERE e.entry LIKE ?
+            """, ('%' + value + '%', ))
+        else:
+            db_cursor.execute("""
+            SELECT
+                e.id,
+                e.date,
+                e.entry,
+                e.mood_id,
+                e.concepts,
+                m.label
+            FROM entries e
+            JOIN Moods m ON e.mood_id = m.id
+            """)
 
         # Initialize an empty list to hold all location representations
         entries = []
@@ -30,7 +47,9 @@ def get_all_entries():
         # Iterate list of data returned from database
         for row in dataset:
 
-            entry = Entry(row['id'], row['date'], row['entry'], row['mood_id'])
+            entry = Entry(row['id'], row['date'], row['entry'], row['mood_id'], row['concepts'])
+            mood = Mood("", row['label'])
+            entry.mood = mood.__dict__
 
             entries.append(entry.__dict__)
 
@@ -50,8 +69,11 @@ def get_single_entry(id):
             e.id,
             e.date,
             e.entry,
-            e.mood_id
+            e.mood_id,
+            e.concepts,
+            m.label
         FROM entries e
+        JOIN Moods m ON e.mood_id = m.id
         WHERE e.id = ?
         """, ( id, ))
 
@@ -59,21 +81,34 @@ def get_single_entry(id):
         data = db_cursor.fetchone()
 
         # Create an animal instance from the current row
-        entry = Entry(data['id'], data['date'], data['entry'], data['mood_id'])
+        entry = Entry(data['id'], data['date'], data['entry'], data['mood_id'], data['concepts'])
+        mood = Mood('', data['label'])
+        entry.mood = mood.__dict__
 
         return json.dumps(entry.__dict__)
 
 def create_entry(entry):
 
-    max_id = LOCATIONS[-1]["id"]
+    with sqlite3.connect("./dailyjournal.db") as conn:
+        db_cursor = conn.cursor()
 
-    new_id = max_id + 1
+        db_cursor.execute("""
+        INSERT INTO Entries
+            ( date, entry, mood_id, concepts )
+        VALUES
+            ( ?, ?, ?, ?);
+        """, (entry['date'], entry['entry'],
+              entry['moodId'], entry['concept'], ))
 
-    location["id"] = new_id
+        # The `lastrowid` property on the cursor will return
+        # the primary key of the last thing that got added to
+        # the database.
+        id = db_cursor.lastrowid
 
-    LOCATIONS.append(location)
+        entry['id'] = id
 
-    return location
+
+    return json.dumps(entry)
 
 def delete_entry(id):
     with sqlite3.connect("./dailyjournal.db") as conn:
@@ -82,12 +117,32 @@ def delete_entry(id):
         db_cursor.execute("""
         DELETE FROM Entries
         WHERE id = ?
-        """), (id, ))
+        """, (id, ))
 
         
-def update_location(id, new_location):
+def update_entry(id, new_entry):
 
-    for index, location in enumerate(LOCATIONS):
-        if location["id"] == id:
-            LOCATIONS[index] = new_location
-            break
+    with sqlite3.connect("./dailyjournal.db") as conn:
+        db_cursor = conn.cursor()
+
+        db_cursor.execute("""
+        UPDATE Entries
+            SET
+                date = ?,
+                entry = ?,
+                mood_id = ?,
+                concepts = ?
+        WHERE id = ?
+        """, (new_entry['date'], new_entry['entry'],
+              new_entry['moodId'], new_entry['concept'], id, ))
+
+        # Were any rows affected?
+        # Did the client send an `id` that exists?
+        rows_affected = db_cursor.rowcount
+
+    if rows_affected == 0:
+        # Forces 404 response by main module
+        return False
+    else:
+        # Forces 204 response by main module
+        return True
